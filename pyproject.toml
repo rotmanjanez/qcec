@@ -165,6 +165,7 @@ filterwarnings = [
 
 [tool.coverage]
 run.source = ["mqt.qcec"]
+paths.source = ["python/mqt/qcec", "*/site-packages/mqt/qcec"]
 run.core = "sysmon"
 run.parallel = true
 run.omit = ["python/mqt/qcec/_compat/typing.py"]
@@ -345,9 +346,6 @@ cache-keys = [
   { git = { commit = true, tags = true } },
   { file = "bindings/**/*.cpp"},
 ]
-
-[tool.uv.sources]
-mqt-qcec = { workspace = true }
 
 
 [dependency-groups]

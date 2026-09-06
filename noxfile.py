@@ -66,32 +66,50 @@ def _run_tests(
     pytest_run_args: Sequence[str] = (),
 ) -> None:
     env = {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location}
-    if shutil.which("cmake") is None and shutil.which("cmake3") is None:
-        session.install("cmake")
-    if shutil.which("ninja") is None:
-        session.install("ninja")
+    if "MQT_WHEELHOUSE" in os.environ:
+        # CI has built the wheels already and points uv at them. `uv sync` would
+        # rebuild the project from the tree, so leave it out and install the wheel.
+        # Re-resolving (`minimums`) needs the project's version, which uv can only
+        # get from a build as well, so that path reads pyproject.toml directly.
+        venv = session.virtualenv.location
+        if install_args:
+            session.run(
+                "uv", "pip", "install", "--python", venv, "-r", "pyproject.toml", "--group", "test", *install_args
+            )
+        else:
+            session.run("uv", "sync", "--no-dev", "--group", "test", "--no-install-project", env=env)
+        session.run("uv", "pip", "install", "--python", venv, "mqt-qcec")
+        project_args = ["--no-sync"]  # everything is installed already
+    else:
+        if shutil.which("cmake") is None and shutil.which("cmake3") is None:
+            session.install("cmake")
+        if shutil.which("ninja") is None:
+            session.install("ninja")
 
-    # install build and test dependencies on top of the existing environment
-    session.run(
-        "uv",
-        "sync",
-        "--inexact",
-        "--only-group",
-        "build",
-        "--only-group",
-        "test",
-        "--verbose",
-        *install_args,
-        env=env,
-    )
+        # install build and test dependencies on top of the existing environment
+        session.run(
+            "uv",
+            "sync",
+            "--inexact",
+            "--only-group",
+            "build",
+            "--only-group",
+            "test",
+            "--verbose",
+            *install_args,
+            env=env,
+        )
+        project_args = [
+            "--no-dev",  # do not auto-install dev dependencies
+            "--no-build-isolation-package",
+            "mqt-qcec",  # build the project without isolation
+        ]
     if extra_command:
         session.run(*extra_command, env=env)
     session.run(
         "uv",
         "run",
-        "--no-dev",  # do not auto-install dev dependencies
-        "--no-build-isolation-package",
-        "mqt-qcec",  # build the project without isolation
+        *project_args,
         "--verbose",
         *install_args,
         "pytest",
@@ -121,8 +139,7 @@ def minimums(session: nox.Session) -> None:
             install_args=["--resolution=lowest-direct"],
             pytest_run_args=["-Wdefault"],
         )
-        env = {"UV_PROJECT_ENVIRONMENT": session.virtualenv.location}
-        session.run("uv", "tree", "--frozen", env=env)
+        session.run("uv", "pip", "tree", "--python", session.virtualenv.location)
 
 
 @nox.session(reuse_venv=True, venv_backend="uv", python=PYTHON_ALL_VERSIONS)
